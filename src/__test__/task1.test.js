@@ -12,31 +12,35 @@ describe('asyncOperationDemo function', () => {
     console.error = vi.fn()
     console.log = vi.fn()
 
-    // Використовуємо мок-функції для асинхронних API
-    vi.stubGlobal('setTimeout', vi.fn((cb) => {
-      cb()
-      return 1
-    }))
-    
-    vi.stubGlobal('setImmediate', vi.fn((cb) => {
-      cb()
-      return 1
-    }))
+    // Використовуємо фейкові таймери для коректної емуляції асинхронності
+    vi.useFakeTimers()
   })
 
   it('executes async calls in the expected order', async () => {
     const callback = vi.fn()
+    // Спеціальні змінні для відстеження порядку викликів
+    const callOrder = []
+    
+    // Перевизначаємо callback для відстеження порядку викликів
+    const trackedCallback = (operation) => {
+      callOrder.push(operation)
+      callback(operation)
+    }
 
-    asyncOperationDemo(callback)
+    asyncOperationDemo(trackedCallback)
 
     // Перевіряємо синхронні виклики
     expect(console.log).toHaveBeenCalledWith('Перший виклик')
     expect(console.log).toHaveBeenCalledWith('Останній виклик')
 
-    // Запускаємо nextTick вручну
-    await new Promise(resolve => process.nextTick(resolve))
+    // Запускаємо асинхронні операції в правильному порядку
+    // Спочатку всі nextTick
+    await vi.runAllTicks()
     
-    // Перевіряємо всі очікувані виклики
+    // Потім запускаємо всі мікротаски (включаючи promises) і таймери
+    await vi.runAllTimersAsync()
+    
+    // Перевіряємо всі очікувані виклики console.log
     expect(console.log).toHaveBeenCalledWith('Виконано nextTick')
     expect(console.log).toHaveBeenCalledWith('Виконано setImmediate')
     expect(console.log).toHaveBeenCalledWith('Виконано setTimeout')
@@ -46,16 +50,16 @@ describe('asyncOperationDemo function', () => {
     expect(callback).toHaveBeenCalledWith('setImmediate')
     expect(callback).toHaveBeenCalledWith('setTimeout')
     
-    // Перевіряємо порядок викликів - це може відрізнятися через різницю в обробці асинхронності
+    // Перевіряємо точний порядок викликів
+    expect(callOrder).toEqual(['nextTick', 'setImmediate', 'setTimeout'])
     expect(callback).toHaveBeenCalledTimes(3)
   })
 
   afterEach(() => {
-    // Відновлюємо оригінальні методи console і глобальні функції
+    // Відновлюємо оригінальні методи console і таймери
     console.error = originalConsoleError
     console.log = originalConsoleLog
     
-    vi.unstubAllGlobals()
-    vi.resetAllMocks()
+    vi.useRealTimers()
   })
 })
